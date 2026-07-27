@@ -1,0 +1,15 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/gallery-20260727.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/photography-20260727.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/gallery.json
+  Cache-Control: public, max-age=0, must-revalidate
