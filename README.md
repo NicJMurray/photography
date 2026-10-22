@@ -1,6 +1,6 @@
 # Photography
 
-Source files for [njmurray.com/photography](https://njmurray.com/photography/).
+Source files for [photography.njmurray.com](https://photography.njmurray.com/).
 
 The gallery currently contains 21 photographs, each stored in responsive
 960-pixel and 1920-pixel WebP versions.
@@ -15,5 +15,4 @@ The gallery currently contains 21 photographs, each stored in responsive
 - `photos/` — responsive gallery images
 - `og.jpg` — social sharing image
 
-The production page is published as part of the main
-[`NicJMurray/homepage`](https://github.com/NicJMurray/homepage) site.
+The gallery deploys independently from this repository through Cloudflare Pages. See [DEPLOYMENT.md](DEPLOYMENT.md) for the build and publishing workflow.
