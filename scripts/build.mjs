@@ -15,7 +15,7 @@ for (const photo of gallery) {
 }
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-for (const file of ['index.html', 'photography-20260727.css', 'gallery-20260727.js', 'gallery.json', 'og.jpg', 'photos']) {
+for (const file of ['index.html', 'photography-20260727.css', 'gallery-20260727.js', 'photo-processing.js', 'gallery.json', 'og.jpg', 'photos', '_headers']) {
   await cp(path.join(root, file), path.join(output, file), { recursive: true });
 }
 console.log(`Built gallery with ${gallery.length} photographs.`);

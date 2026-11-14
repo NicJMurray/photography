@@ -34,6 +34,7 @@
     <link rel="canonical" href="https://photography.njmurray.com/" />
     <link rel="preload" as="image" href="photos/dscf0218-1920.webp" type="image/webp" />
     <link rel="stylesheet" href="photography-20260727.css" />
+    <link rel="stylesheet" href="https://recipes.njmurray.com/shared-admin.css" />
   </head>
 
   <body>
@@ -56,6 +57,16 @@
       <section class="collection" id="collection" aria-labelledby="collection-title">
         <div class="collection__head">
           <h1 id="collection-title">My Photos</h1>
+          <div class="photo-editor" id="photo-editor" hidden>
+            <div class="photo-editor__actions">
+              <button id="upload-photos" type="button">Upload photos</button>
+              <button id="edit-photos" type="button" aria-pressed="false">Remove photos</button>
+              <input id="photo-files" type="file" accept="image/jpeg,.jpg,.jpeg" multiple hidden />
+            </div>
+            <p id="photo-order">Ordered by filename; capture dates are kept when available.</p>
+            <p id="photo-status" role="status" aria-live="polite"></p>
+            <ul class="photo-queue" id="photo-queue" aria-label="Photo uploads" hidden></ul>
+          </div>
         </div>
 
         <div class="gallery" id="gallery" aria-live="polite">
@@ -73,6 +84,7 @@
 
     <footer>
       <p>&copy; <span id="year"></span> Nic Murray</p>
+      <div id="admin-account"></div>
       <a href="https://github.com/NicJMurray" rel="noopener" target="_blank">GitHub ↗</a>
     </footer>
 
@@ -96,6 +108,6 @@
       </div>
     </dialog>
 
-    <script src="gallery-20260727.js" defer></script>
+    <script src="gallery-20260727.js" type="module"></script>
   </body>
 </html>

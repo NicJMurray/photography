@@ -13,3 +13,6 @@
 
 /gallery.json
   Cache-Control: public, max-age=0, must-revalidate
+
+/photo-processing.js
+  Cache-Control: public, max-age=0, must-revalidate
