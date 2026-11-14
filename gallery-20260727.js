@@ -97,7 +97,7 @@ function buildGallery() {
   if (!galleryLoaded || galleryLoadFailed) return;
   const currentPhoto = lightbox.open ? photos[activeIndex]?.id : null;
   photos = sortPhotos([...seeds, ...uploaded].filter((photo) => !hidden.has(photo.id)));
-  orderElement.textContent = 'Chronological order.';
+  orderElement.textContent = 'Newest first.';
   const visibleIds = new Set(photos.map((photo) => photo.id));
   for (const [id, card] of galleryCards) {
     if (!visibleIds.has(id)) {

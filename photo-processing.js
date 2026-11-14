@@ -103,12 +103,12 @@ export function dateFromFilename(name) {
   return captureDate(`${year}:${month}:${day} ${hour}:${minute}:${second}`);
 }
 
-function compareFilenamesAscending(a, b) {
-  const filenames = naturalOrder.compare(a.file || a.id || '', b.file || b.id || '');
+function compareFilenamesDescending(a, b) {
+  const filenames = naturalOrder.compare(b.file || b.id || '', a.file || a.id || '');
   if (filenames) return filenames;
   const aId = String(a.id || '');
   const bId = String(b.id || '');
-  return aId < bId ? -1 : aId > bId ? 1 : 0;
+  return aId < bId ? 1 : aId > bId ? -1 : 0;
 }
 
 function orderingTime(photo) {
@@ -121,11 +121,11 @@ function orderingTime(photo) {
 }
 
 export function sortPhotos(photos) {
-  // Reverse the previous newest-first collection: undated originals first in
-  // camera filename order, then known dates oldest first. Keep fixed groups.
+  // Put recent captures first, followed by undated originals in descending
+  // camera filename order. Fixed groups keep mixed-date ordering transitive.
   return photos.map((photo) => ({ photo, time: orderingTime(photo) })).sort((a, b) => {
-    if ((a.time === null) !== (b.time === null)) return a.time === null ? -1 : 1;
-    return (a.time !== null ? a.time - b.time : 0) || compareFilenamesAscending(a.photo, b.photo);
+    if ((a.time === null) !== (b.time === null)) return a.time === null ? 1 : -1;
+    return (a.time !== null ? b.time - a.time : 0) || compareFilenamesDescending(a.photo, b.photo);
   }).map(({ photo }) => photo);
 }
 

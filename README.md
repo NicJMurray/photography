@@ -8,7 +8,7 @@ Use **Log in** in the top navigation with the same account as recipes, then choo
 
 Only the optimized WebP versions leave your device. The browser applies JPEG orientation, extracts the capture date, and removes EXIF, GPS, XMP and colour-profile metadata from the published files. Originals are not kept. Images keep their aspect ratio, are never enlarged, and use progressively lower WebP quality if necessary to stay below 2 MB per rendition. Each original JPEG must be under 40 MB and 80 megapixels; select up to 50 at a time.
 
-The gallery uses chronological order, reversing the previous newest-first collection. The original 21 photographs have no capture dates and appear first in natural filename order (`DSCF0881.jpg` before `DSCF0907.jpg`). Dated photographs follow, oldest first, using capture dates from EXIF or recognizable date filenames; an upload without a capture date uses its publication date. File modification time is never treated as capture time. Fullscreen navigation follows the same order.
+The gallery shows the newest photographs first using capture dates from EXIF or recognizable date filenames; an upload without a capture date uses its publication date. The original 21 photographs have no capture dates and follow in descending natural filename order (`DSCF0907.jpg` before `DSCF0881.jpg`). File modification time is never treated as capture time. Fullscreen navigation follows the same order.
 
 Choose **Remove photos**, then **Remove** on an image to remove it from the public gallery. **Done** hides the removal controls. Public visitors can browse the gallery and fullscreen viewer without logging in.
 
