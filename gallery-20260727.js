@@ -92,9 +92,7 @@ function buildGallery() {
   observer?.disconnect();
   const currentPhoto = lightbox.open ? photos[activeIndex]?.id : null;
   photos = sortPhotos([...seeds, ...uploaded].filter((photo) => !hidden.has(photo.id)));
-  orderElement.textContent = photos.length && photos.every((photo) => photo.capturedAt)
-    ? 'Ordered by capture date.'
-    : 'Ordered by filename; capture dates are kept when available.';
+  orderElement.textContent = 'Newest first by capture date, or upload date when unknown. Undated originals follow filename order.';
   const fragment = document.createDocumentFragment();
 
   photos.forEach((photo, index) => {

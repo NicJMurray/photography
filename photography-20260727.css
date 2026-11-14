@@ -225,8 +225,9 @@ h1 {
   font-size: 0.8rem;
 }
 
-footer #admin-account {
-  margin-left: auto;
+nav #admin-account {
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 .gallery {
@@ -412,6 +413,14 @@ footer p {
 @media (max-width: 600px) {
   .site-header {
     min-height: 64px;
+    padding-right: 16px;
+    padding-left: 16px;
+    gap: 12px;
+  }
+
+  nav {
+    gap: 12px;
+    font-size: 0.8rem;
   }
 
   nav a:first-child {

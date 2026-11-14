@@ -51,12 +51,49 @@ test('uses only real filename timestamps, never camera sequence numbers or modif
   assert.equal(dateFromFilename('IMG_20261325.jpg'), null);
 });
 
-test('sorts dates only when complete, and otherwise inserts camera filenames naturally', () => {
-  const originals = [{ id: 'b', file: 'DSCF0907.jpg' }, { id: 'a', file: 'DSCF0008.jpg' }];
-  const mixed = [...originals, { id: 'c', file: 'DSCF10.jpg', capturedAt: '2026-08-01T00:00:00Z' }];
-  assert.deepEqual(sortPhotos(mixed).map((photo) => photo.id), ['a', 'c', 'b']);
-  assert.deepEqual(originals.map((photo) => photo.id), ['b', 'a']);
-  assert.deepEqual(sortPhotos([{ id: 'a', file: 'A.jpg', capturedAt: '2026-08-01T00:00:00Z' }, { id: 'b', file: 'B.jpg', capturedAt: '2026-07-01T00:00:00Z' }]).map((photo) => photo.id), ['b', 'a']);
+test('sorts mixed dated uploads newest first and undated originals by descending natural filename', () => {
+  const photos = [
+    { id: 'seed-2', file: 'DSCF2.jpg' },
+    { id: 'upload-old', file: 'DSCF9999.jpg', capturedAt: '2026-07-01T00:00:00Z' },
+    { id: 'seed-10', file: 'DSCF10.jpg' },
+    { id: 'upload-new', file: 'DSCF1.jpg', capturedAt: '2026-08-01T00:00:00Z' },
+  ];
+  const snapshot = structuredClone(photos);
+  const expected = ['upload-new', 'upload-old', 'seed-10', 'seed-2'];
+  // Every permutation must produce the same result, including the formerly
+  // problematic date/filename mixtures that can create comparator cycles.
+  function permutations(items) {
+    return items.length ? items.flatMap((item, index) => permutations(items.filter((_, at) => at !== index)).map((rest) => [item, ...rest])) : [[]];
+  }
+  for (const input of permutations(photos)) assert.deepEqual(sortPhotos(input).map((photo) => photo.id), expected);
+  assert.deepEqual(photos, snapshot);
+  assert.deepEqual(sortPhotos([]), []);
+});
+
+test('uses creation time only for unknown-date upload rows and preserves unknown capture metadata', () => {
+  const photos = [
+    { id: 'original', file: 'DSCF10.jpg', capturedAt: null, createdAt: '2026-12-01T00:00:00Z' },
+    { id: 'upload-new', file: 'DSCF2.jpg', capturedAt: '2026-08-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' },
+    { id: 'upload-unknown', file: 'DSCF3.jpg', capturedAt: null, createdAt: '2026-07-01T00:00:00Z' },
+    { id: 'upload-invalid', file: 'DSCF4.jpg', capturedAt: 'invalid date', createdAt: '2026-06-01T00:00:00Z' },
+    { id: 'upload-no-date', file: 'DSCF5.jpg', capturedAt: 12345, createdAt: 'invalid date' },
+    { id: 'upload-old', file: 'DSCF6.jpg', capturedAt: '2026-05-01T00:00:00Z', createdAt: '2026-12-01T00:00:00Z' },
+  ];
+  assert.deepEqual(sortPhotos(photos).map((photo) => photo.id), ['upload-new', 'upload-unknown', 'upload-invalid', 'upload-old', 'original', 'upload-no-date']);
+  assert.equal(photos[2].capturedAt, null);
+  assert.equal(photos[3].capturedAt, 'invalid date');
+});
+
+test('breaks equal timestamp and filename ties deterministically without inferring capture dates from filenames', () => {
+  const capturedAt = '2026-07-01T00:00:00Z';
+  const photos = [
+    { id: 'upload-a', file: 'DSCF2.jpg', capturedAt },
+    { id: 'upload-b', file: 'DSCF2.jpg', capturedAt },
+    { id: 'upload-c', file: 'DSCF10.jpg', capturedAt },
+    { id: 'seed-date', file: '20991231.jpg' },
+  ];
+  assert.deepEqual(sortPhotos(photos).map((photo) => photo.id), ['upload-c', 'upload-b', 'upload-a', 'seed-date']);
+  assert.deepEqual(sortPhotos([...photos].reverse()).map((photo) => photo.id), ['upload-c', 'upload-b', 'upload-a', 'seed-date']);
 });
 
 test('strips EXIF, XMP and colour metadata chunks and clears their WebP flags', async () => {

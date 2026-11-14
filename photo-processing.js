@@ -103,17 +103,30 @@ export function dateFromFilename(name) {
   return captureDate(`${year}:${month}:${day} ${hour}:${minute}:${second}`);
 }
 
-function compareFilenames(a, b) {
-  return naturalOrder.compare(a.file || a.id || '', b.file || b.id || '')
-    || naturalOrder.compare(a.id || '', b.id || '');
+function compareFilenamesDescending(a, b) {
+  const filenames = naturalOrder.compare(b.file || b.id || '', a.file || a.id || '');
+  if (filenames) return filenames;
+  const aId = String(a.id || '');
+  const bId = String(b.id || '');
+  return aId < bId ? 1 : aId > bId ? -1 : 0;
+}
+
+function orderingTime(photo) {
+  const timestamp = (value) => typeof value === 'string' && value.trim() && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null;
+  const capturedAt = timestamp(photo.capturedAt);
+  if (capturedAt !== null) return capturedAt;
+  // Upload time helps place an upload with no capture date. It never becomes
+  // capture metadata, and it must not give the original static photos a date.
+  return typeof photo.id === 'string' && photo.id.startsWith('upload-') ? timestamp(photo.createdAt) : null;
 }
 
 export function sortPhotos(photos) {
-  // The original gallery has camera sequence filenames but no capture dates.
-  // Use the same natural filename order until every photograph has a date;
-  // combining pairwise date/filename comparisons would produce an unstable sort.
-  const allDated = photos.every((photo) => photo.capturedAt && Number.isFinite(Date.parse(photo.capturedAt)));
-  return [...photos].sort((a, b) => (allDated ? Date.parse(a.capturedAt) - Date.parse(b.capturedAt) : 0) || compareFilenames(a, b));
+  // Known dates sort newest first; undated originals follow in descending
+  // camera filename order. Fixed groups make mixed-date ordering transitive.
+  return photos.map((photo) => ({ photo, time: orderingTime(photo) })).sort((a, b) => {
+    if ((a.time === null) !== (b.time === null)) return a.time === null ? 1 : -1;
+    return (a.time !== null ? b.time - a.time : 0) || compareFilenamesDescending(a.photo, b.photo);
+  }).map(({ photo }) => photo);
 }
 
 export async function stripWebPMetadata(blob) {

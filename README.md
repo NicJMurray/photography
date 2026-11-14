@@ -4,11 +4,11 @@ Source for [photography.njmurray.com](https://photography.njmurray.com/), a mini
 
 ## Editing in the browser
 
-Log in using the same account as recipes, then choose **Upload photos**. Select several JPEGs to publish them in sequence. Each photograph gets a local preview and its own Preparing, Uploading, Saved or Failed status. Successful uploads appear immediately; a failed file does not stop the rest. Selecting the same photograph again does not add another tile.
+Use **Log in** in the top navigation with the same account as recipes, then choose **Upload photos**. Select several JPEGs to publish them in sequence. Each photograph gets a local preview and its own Preparing, Uploading, Saved or Failed status. Successful uploads appear immediately; a failed file does not stop the rest. Selecting the same photograph again does not add another tile.
 
 Only the optimized WebP versions leave your device. The browser applies JPEG orientation, extracts the capture date, and removes EXIF, GPS, XMP and colour-profile metadata from the published files. Originals are not kept. Images keep their aspect ratio, are never enlarged, and use progressively lower WebP quality if necessary to stay below 2 MB per rendition. Each original JPEG must be under 40 MB and 80 megapixels; select up to 50 at a time.
 
-The existing 21 photographs have camera sequence filenames but no capture dates. While any photograph is undated, the collection uses natural filename order, so `DSCF0885.jpg` slots between `DSCF0881.jpg` and `DSCF0907.jpg`. Capture dates are retained from EXIF or recognizable date filenames. A fully dated collection uses capture date order. File modification time is never treated as capture time.
+The gallery shows the newest photographs first. Capture dates from EXIF or recognizable date filenames determine the order; an upload without a capture date uses its publication date. Photographs with known dates appear before the original 21 images, whose dates are unavailable. Those originals follow descending natural filename order (`DSCF0907.jpg` before `DSCF0881.jpg`). File modification time is never treated as capture time. The newest image is at the top left on desktop and first on mobile; fullscreen navigation follows the same order.
 
 Choose **Remove photos**, then **Remove** on an image to remove it from the public gallery. **Done** hides the removal controls. Public visitors can browse the gallery and fullscreen viewer without logging in.
 

@@ -32,7 +32,6 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#e8e4dc" />
     <link rel="canonical" href="https://photography.njmurray.com/" />
-    <link rel="preload" as="image" href="photos/dscf0218-1920.webp" type="image/webp" />
     <link rel="stylesheet" href="photography-20260727.css" />
     <link rel="stylesheet" href="https://recipes.njmurray.com/shared-admin.css" />
   </head>
@@ -50,6 +49,7 @@
           All projects
           <span aria-hidden="true">↗</span>
         </a>
+        <span id="admin-account"></span>
       </nav>
     </header>
 
@@ -63,7 +63,7 @@
               <button id="edit-photos" type="button" aria-pressed="false">Remove photos</button>
               <input id="photo-files" type="file" accept="image/jpeg,.jpg,.jpeg" multiple hidden />
             </div>
-            <p id="photo-order">Ordered by filename; capture dates are kept when available.</p>
+            <p id="photo-order">Newest first. Undated originals follow filename order.</p>
             <p id="photo-status" role="status" aria-live="polite"></p>
             <ul class="photo-queue" id="photo-queue" aria-label="Photo uploads" hidden></ul>
           </div>
@@ -84,7 +84,6 @@
 
     <footer>
       <p>&copy; <span id="year"></span> Nic Murray</p>
-      <div id="admin-account"></div>
       <a href="https://github.com/NicJMurray" rel="noopener" target="_blank">GitHub ↗</a>
     </footer>
 
