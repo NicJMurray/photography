@@ -12,7 +12,9 @@ The gallery shows the newest photographs first using capture dates from EXIF or 
 
 Choose **Remove photos**, then **Remove** on an image to remove it from the public gallery. **Done** hides the removal controls. Public visitors can browse the gallery and fullscreen viewer without logging in.
 
-The initial gallery loads as one collection, and existing photographs stay in place when login status or editing controls change. In the fullscreen viewer, swipe left for the next photograph and right for the previous one. Pinch and vertical gestures do not change photographs; arrow buttons and keyboard navigation also work.
+The initial gallery loads as one collection, and existing photographs stay in place when login status or editing controls change. The fullscreen viewer supports pinch or double-tap to zoom and dragging to explore a magnified photograph. Panning stays within that photograph, including at its edges. Zoom back out to resume swipe navigation; the next and previous photographs follow your finger and settle smoothly. Arrow buttons and keyboard navigation also work, and desktop scrolling zooms the image. Escape or Close returns focus to the gallery. Reduced-motion preferences are respected.
+
+The viewer uses the locally hosted, MIT-licensed PhotoSwipe 5.4.4 core, loaded only when a photograph is opened. Adjacent photographs preload for smooth navigation. The core, its integration module and styles receive content-hashed URLs during the build; the viewer makes no runtime CDN requests.
 
 ## Storage and authentication
 
@@ -29,6 +31,7 @@ If the shared API is temporarily unavailable, the original static collection sti
 - `index.html`, `photography-20260727.css` — public page and layout.
 - `gallery-20260727.js` — gallery, fullscreen viewer and signed-in editing controls.
 - `photo-processing.js` — bounded JPEG decoding, date extraction and metadata-free WebP conversion.
+- `viewer.js`, `vendor/photoswipe/` — fullscreen zoom, pan and swipe navigation, with the vendored license.
 - `gallery.json`, `photo-details.json`, `photos/` — original collection.
 - `test/photo-processing.test.mjs` — date, malformed input, metadata removal, ordering and conversion tests.
 

@@ -13,13 +13,19 @@ test('changed dependency and CSS receive fresh URLs while identical builds stay 
     'gallery.json': JSON.stringify([{ src: 'photos/small.webp', large: 'photos/large.webp' }]),
     'photos/small.webp': 'fixture', 'photos/large.webp': 'fixture',
     'photo-processing.js': 'export const order = "old";',
-    'gallery-20260727.js': "import { order } from './photo-processing.js'; console.log(order);",
+    'gallery-20260727.js': "import { order } from './photo-processing.js'; import { viewer } from './viewer.js'; console.log(order, viewer);",
+    'viewer.js': "export const viewer = () => import('./vendor/photoswipe/photoswipe.esm.min.js');",
+    'vendor/photoswipe/photoswipe.esm.min.js': 'export default class PhotoSwipe {}',
+    'vendor/photoswipe/photoswipe.css': '.pswp { position: fixed; }',
     'photography-20260727.css': 'body { color: black; }',
     'index.html': '<link rel="stylesheet" href="photography-20260727.css"><script src="gallery-20260727.js" type="module"></script>',
     'og.jpg': 'fixture', '_headers': '/assets/*\n  Cache-Control: public, max-age=31536000, immutable',
     'PRIVATE.txt': 'must never be published',
   };
-  for (const [file, contents] of Object.entries(sources)) await writeFile(path.join(root, file), contents);
+  for (const [file, contents] of Object.entries(sources)) {
+    await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+    await writeFile(path.join(root, file), contents);
+  }
   const first = await buildSite(root);
   const html = await readFile(path.join(root, 'dist/index.html'), 'utf8');
   assert.ok(html.includes(`/assets/${first.entryName}`));
@@ -27,6 +33,11 @@ test('changed dependency and CSS receive fresh URLs while identical builds stay 
   const entry = await readFile(path.join(root, 'dist/assets', first.entryName), 'utf8');
   assert.ok(entry.includes(`from './${first.helperName}'`));
   assert.ok(!entry.includes("from './photo-processing.js'"));
+  assert.ok(entry.includes(`from './${first.viewerName}'`));
+  const viewer = await readFile(path.join(root, 'dist/assets', first.viewerName), 'utf8');
+  assert.ok(viewer.includes(`import('./${first.coreName}')`));
+  assert.ok(!viewer.includes("import('./vendor/photoswipe/"));
+  assert.ok((await readFile(path.join(root, 'dist/assets', first.styleName), 'utf8')).includes('.pswp'));
   assert.ok(!(await readdir(path.join(root, 'dist'))).includes('PRIVATE.txt'));
   assert.deepEqual(await buildSite(root), first, 'Unchanged sources must keep reusable cache URLs.');
   await writeFile(path.join(root, 'photo-processing.js'), 'export const order = "new";');
@@ -48,4 +59,11 @@ test('changed dependency and CSS receive fresh URLs while identical builds stay 
   assert.notEqual(fourth.entryName, third.entryName);
   assert.equal(fourth.helperName, third.helperName);
   assert.equal(fourth.styleName, third.styleName);
+  await writeFile(path.join(root, 'vendor/photoswipe/photoswipe.esm.min.js'), 'export default class UpdatedPhotoSwipe {}');
+  const fifth = await buildSite(root);
+  assert.notEqual(fifth.coreName, fourth.coreName);
+  assert.notEqual(fifth.viewerName, fourth.viewerName);
+  assert.notEqual(fifth.entryName, fourth.entryName);
+  assert.equal(fifth.helperName, fourth.helperName);
+  assert.equal(fifth.styleName, fourth.styleName);
 });

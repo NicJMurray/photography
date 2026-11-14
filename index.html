@@ -57,6 +57,7 @@
       <section class="collection" id="collection" aria-labelledby="collection-title">
         <div class="collection__head">
           <h1 id="collection-title">My Photos</h1>
+          <p id="viewer-status" role="status" hidden></p>
           <div class="photo-editor" id="photo-editor" hidden>
             <div class="photo-editor__actions">
               <button id="upload-photos" type="button">Upload photos</button>
@@ -86,26 +87,6 @@
       <p>&copy; <span id="year"></span> Nic Murray</p>
       <a href="https://github.com/NicJMurray" rel="noopener" target="_blank">GitHub ↗</a>
     </footer>
-
-    <dialog class="lightbox" id="lightbox" aria-label="Fullscreen photograph">
-      <div class="lightbox__stage">
-        <button class="lightbox__close" type="button" aria-label="Close fullscreen photograph">
-          Close <span aria-hidden="true">×</span>
-        </button>
-
-        <button class="lightbox__nav lightbox__nav--previous" type="button" aria-label="Previous photograph">
-          <span aria-hidden="true">←</span>
-        </button>
-
-        <figure>
-          <img src="" alt="" />
-        </figure>
-
-        <button class="lightbox__nav lightbox__nav--next" type="button" aria-label="Next photograph">
-          <span aria-hidden="true">→</span>
-        </button>
-      </div>
-    </dialog>
 
     <script src="gallery-20260727.js" type="module"></script>
   </body>

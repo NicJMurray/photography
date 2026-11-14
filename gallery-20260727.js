@@ -1,12 +1,9 @@
 import { processJPEG, sortPhotos } from './photo-processing.js';
+import { createPhotoViewer } from './viewer.js';
 
 const API = 'https://recipes.njmurray.com';
 const galleryElement = document.querySelector('#gallery');
-const lightbox = document.querySelector('#lightbox');
-const lightboxImage = lightbox.querySelector('img');
-const closeButton = lightbox.querySelector('.lightbox__close');
-const previousButton = lightbox.querySelector('.lightbox__nav--previous');
-const nextButton = lightbox.querySelector('.lightbox__nav--next');
+const viewerStatus = document.querySelector('#viewer-status');
 const editor = document.querySelector('#photo-editor');
 const uploadButton = document.querySelector('#upload-photos');
 const editButton = document.querySelector('#edit-photos');
@@ -20,8 +17,6 @@ let seeds = [];
 let uploaded = [];
 let hidden = new Set();
 let photos = [];
-let activeIndex = 0;
-let lastTrigger = null;
 let galleryLoaded = false;
 let galleryLoadFailed = false;
 let authenticated = false;
@@ -32,6 +27,7 @@ let galleryAvailable = false;
 let admin;
 let request;
 let imageSequence = 0;
+const photoViewer = createPhotoViewer({ getPhotos: () => photos });
 
 document.querySelector('#year').textContent = new Date().getFullYear();
 
@@ -73,29 +69,18 @@ function assignPhotoImage(image, photo, responsive = false) {
   apply();
 }
 
-function updateLightbox(index) {
-  if (!photos.length) {
-    lightbox.close();
-    return;
+async function openLightbox(index, trigger) {
+  viewerStatus.hidden = true;
+  try {
+    await photoViewer.open(index, trigger);
+  } catch {
+    viewerStatus.textContent = 'The photo viewer could not open. Please try again.';
+    viewerStatus.hidden = false;
   }
-  activeIndex = (index + photos.length) % photos.length;
-  const photo = photos[activeIndex];
-  if (lightboxImage.dataset.photoId !== photo.id || !lightboxImage.getAttribute('src')) {
-    lightboxImage.dataset.photoId = photo.id;
-    assignPhotoImage(lightboxImage, photo);
-  }
-  lightboxImage.alt = photo.alt || photo.title || 'Photograph';
-}
-
-function openLightbox(index, trigger) {
-  lastTrigger = trigger;
-  updateLightbox(index);
-  lightbox.showModal();
 }
 
 function buildGallery() {
   if (!galleryLoaded || galleryLoadFailed) return;
-  const currentPhoto = lightbox.open ? photos[activeIndex]?.id : null;
   photos = sortPhotos([...seeds, ...uploaded].filter((photo) => !hidden.has(photo.id)));
   orderElement.textContent = 'Newest first.';
   const visibleIds = new Set(photos.map((photo) => photo.id));
@@ -168,11 +153,7 @@ function buildGallery() {
     galleryElement.append(empty);
   }
 
-  if (currentPhoto) {
-    const index = photos.findIndex((photo) => photo.id === currentPhoto);
-    if (index < 0) lightbox.close();
-    else updateLightbox(index);
-  }
+  photoViewer.reconcile();
 }
 
 async function loadGallery() {
@@ -375,58 +356,4 @@ editButton.addEventListener('click', () => {
   updateControls();
   buildGallery();
 });
-closeButton.addEventListener('click', () => lightbox.close());
-previousButton.addEventListener('click', () => updateLightbox(activeIndex - 1));
-nextButton.addEventListener('click', () => updateLightbox(activeIndex + 1));
-const swipeSurface = lightbox.querySelector('figure');
-let swipeStart = null;
-let suppressClickUntil = 0;
-lightboxImage.draggable = false;
-lightbox.addEventListener('pointerdown', (event) => {
-  if (event.pointerType !== 'touch' || !lightbox.open) return;
-  if (!event.isPrimary) {
-    swipeStart = null;
-    return;
-  }
-  suppressClickUntil = 0;
-  swipeStart = swipeSurface.contains(event.target)
-    ? { id: event.pointerId, x: event.clientX, y: event.clientY, time: performance.now() }
-    : null;
-});
-lightbox.addEventListener('pointerup', (event) => {
-  const start = swipeStart;
-  swipeStart = null;
-  if (!start || !lightbox.open || event.pointerType !== 'touch' || event.pointerId !== start.id) return;
-  const dx = event.clientX - start.x;
-  const dy = event.clientY - start.y;
-  const threshold = Math.max(45, swipeSurface.clientWidth * 0.12);
-  if (performance.now() - start.time > 1000 || Math.abs(dx) < threshold || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
-  suppressClickUntil = performance.now() + 350;
-  updateLightbox(activeIndex + (dx < 0 ? 1 : -1));
-});
-for (const event of ['pointercancel', 'lostpointercapture']) {
-  lightbox.addEventListener(event, () => { swipeStart = null; });
-}
-lightbox.addEventListener('click', (event) => {
-  if (performance.now() < suppressClickUntil) {
-    event.preventDefault();
-    return;
-  }
-  if (event.target === lightbox || event.target.classList.contains('lightbox__stage')) lightbox.close();
-});
-lightbox.addEventListener('close', () => {
-  swipeStart = null;
-  suppressClickUntil = 0;
-  lightboxImage.dataset.retryToken = '';
-  delete lightboxImage.dataset.photoId;
-  lightboxImage.removeAttribute('src');
-  if (lastTrigger?.isConnected) lastTrigger.focus();
-});
-lightbox.addEventListener('keydown', (event) => {
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    event.preventDefault();
-    updateLightbox(activeIndex + (event.key === 'ArrowLeft' ? -1 : 1));
-  }
-});
-
 await Promise.all([loadGallery(), setupAdmin()]);
