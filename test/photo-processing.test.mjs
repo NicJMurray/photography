@@ -51,7 +51,7 @@ test('uses only real filename timestamps, never camera sequence numbers or modif
   assert.equal(dateFromFilename('IMG_20261325.jpg'), null);
 });
 
-test('sorts mixed dated uploads newest first and undated originals by descending natural filename', () => {
+test('reverses the collection with undated originals in natural filename order then dated uploads oldest first', () => {
   const photos = [
     { id: 'seed-2', file: 'DSCF2.jpg' },
     { id: 'upload-old', file: 'DSCF9999.jpg', capturedAt: '2026-07-01T00:00:00Z' },
@@ -59,7 +59,7 @@ test('sorts mixed dated uploads newest first and undated originals by descending
     { id: 'upload-new', file: 'DSCF1.jpg', capturedAt: '2026-08-01T00:00:00Z' },
   ];
   const snapshot = structuredClone(photos);
-  const expected = ['upload-new', 'upload-old', 'seed-10', 'seed-2'];
+  const expected = ['seed-2', 'seed-10', 'upload-old', 'upload-new'];
   // Every permutation must produce the same result, including the formerly
   // problematic date/filename mixtures that can create comparator cycles.
   function permutations(items) {
@@ -79,7 +79,7 @@ test('uses creation time only for unknown-date upload rows and preserves unknown
     { id: 'upload-no-date', file: 'DSCF5.jpg', capturedAt: 12345, createdAt: 'invalid date' },
     { id: 'upload-old', file: 'DSCF6.jpg', capturedAt: '2026-05-01T00:00:00Z', createdAt: '2026-12-01T00:00:00Z' },
   ];
-  assert.deepEqual(sortPhotos(photos).map((photo) => photo.id), ['upload-new', 'upload-unknown', 'upload-invalid', 'upload-old', 'original', 'upload-no-date']);
+  assert.deepEqual(sortPhotos(photos).map((photo) => photo.id), ['upload-no-date', 'original', 'upload-old', 'upload-invalid', 'upload-unknown', 'upload-new']);
   assert.equal(photos[2].capturedAt, null);
   assert.equal(photos[3].capturedAt, 'invalid date');
 });
@@ -92,8 +92,8 @@ test('breaks equal timestamp and filename ties deterministically without inferri
     { id: 'upload-c', file: 'DSCF10.jpg', capturedAt },
     { id: 'seed-date', file: '20991231.jpg' },
   ];
-  assert.deepEqual(sortPhotos(photos).map((photo) => photo.id), ['upload-c', 'upload-b', 'upload-a', 'seed-date']);
-  assert.deepEqual(sortPhotos([...photos].reverse()).map((photo) => photo.id), ['upload-c', 'upload-b', 'upload-a', 'seed-date']);
+  assert.deepEqual(sortPhotos(photos).map((photo) => photo.id), ['seed-date', 'upload-a', 'upload-b', 'upload-c']);
+  assert.deepEqual(sortPhotos([...photos].reverse()).map((photo) => photo.id), ['seed-date', 'upload-a', 'upload-b', 'upload-c']);
 });
 
 test('strips EXIF, XMP and colour metadata chunks and clears their WebP flags', async () => {

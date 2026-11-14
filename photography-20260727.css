@@ -248,16 +248,6 @@ nav #admin-account {
   position: relative;
   margin: 0 0 clamp(10px, 1.4vw, 20px);
   break-inside: avoid;
-  opacity: 0;
-  transform: translateY(18px);
-  transition:
-    opacity 550ms ease,
-    transform 550ms ease;
-}
-
-.gallery-item.is-visible {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 .gallery-item button {
@@ -345,6 +335,7 @@ footer p {
   height: 100%;
   margin: 0;
   grid-template-rows: minmax(0, 1fr);
+  touch-action: pan-y pinch-zoom;
 }
 
 .lightbox figure img {
@@ -487,10 +478,5 @@ footer p {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
-  }
-
-  .gallery-item {
-    opacity: 1;
-    transform: none;
   }
 }

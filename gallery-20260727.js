@@ -15,13 +15,15 @@ const statusElement = document.querySelector('#photo-status');
 const orderElement = document.querySelector('#photo-order');
 const queueElement = document.querySelector('#photo-queue');
 const previewURLs = new Set();
+const galleryCards = new Map();
 let seeds = [];
 let uploaded = [];
 let hidden = new Set();
 let photos = [];
 let activeIndex = 0;
 let lastTrigger = null;
-let observer;
+let galleryLoaded = false;
+let galleryLoadFailed = false;
 let authenticated = false;
 let editing = false;
 let busy = false;
@@ -52,7 +54,6 @@ function assignPhotoImage(image, photo, responsive = false) {
   let attempts = 0;
   const apply = () => {
     const suffix = attempts ? `?retry=${attempts}` : '';
-    image.src = (responsive ? photo.src : photo.large) + suffix;
     if (responsive) {
       const smallWidth = Math.min(960, photo.width);
       const largeWidth = Math.min(1920, photo.width);
@@ -60,6 +61,7 @@ function assignPhotoImage(image, photo, responsive = false) {
         ? `${photo.large}${suffix} ${largeWidth}w`
         : `${photo.src}${suffix} ${smallWidth}w, ${photo.large}${suffix} ${largeWidth}w`;
     }
+    image.src = (responsive ? photo.src : photo.large) + suffix;
   };
   image.onerror = photo.src.startsWith(`${API}/media/photography/`) ? () => {
     if (attempts >= 3) return;
@@ -78,7 +80,10 @@ function updateLightbox(index) {
   }
   activeIndex = (index + photos.length) % photos.length;
   const photo = photos[activeIndex];
-  assignPhotoImage(lightboxImage, photo);
+  if (lightboxImage.dataset.photoId !== photo.id || !lightboxImage.getAttribute('src')) {
+    lightboxImage.dataset.photoId = photo.id;
+    assignPhotoImage(lightboxImage, photo);
+  }
   lightboxImage.alt = photo.alt || photo.title || 'Photograph';
 }
 
@@ -89,104 +94,133 @@ function openLightbox(index, trigger) {
 }
 
 function buildGallery() {
-  observer?.disconnect();
+  if (!galleryLoaded || galleryLoadFailed) return;
   const currentPhoto = lightbox.open ? photos[activeIndex]?.id : null;
   photos = sortPhotos([...seeds, ...uploaded].filter((photo) => !hidden.has(photo.id)));
-  orderElement.textContent = 'Newest first by capture date, or upload date when unknown. Undated originals follow filename order.';
-  const fragment = document.createDocumentFragment();
+  orderElement.textContent = 'Chronological order.';
+  const visibleIds = new Set(photos.map((photo) => photo.id));
+  for (const [id, card] of galleryCards) {
+    if (!visibleIds.has(id)) {
+      card.figure.remove();
+      galleryCards.delete(id);
+    }
+  }
+  galleryElement.querySelector('.gallery__loading')?.remove();
 
   photos.forEach((photo, index) => {
-    const figure = document.createElement('figure');
-    figure.className = 'gallery-item';
-    const button = document.createElement('button');
-    button.type = 'button';
+    let card = galleryCards.get(photo.id);
+    if (!card) {
+      const figure = document.createElement('figure');
+      figure.className = 'gallery-item';
+      const button = document.createElement('button');
+      button.type = 'button';
+      const image = document.createElement('img');
+      image.sizes = '(max-width: 600px) 100vw, (max-width: 940px) 50vw, 33vw';
+      image.loading = index === 0 ? 'eager' : 'lazy';
+      image.decoding = 'async';
+      button.append(image);
+      button.addEventListener('click', () => {
+        const currentIndex = photos.findIndex((item) => item.id === photo.id);
+        if (currentIndex >= 0) openLightbox(currentIndex, button);
+      });
+      figure.append(button);
+      card = { figure, button, image, imageKey: null };
+      galleryCards.set(photo.id, card);
+    }
+    const { figure, button, image } = card;
     button.setAttribute('aria-label', `View ${photo.title || 'photograph'} fullscreen`);
-    const image = document.createElement('img');
-    assignPhotoImage(image, photo, true);
-    image.sizes = '(max-width: 600px) 100vw, (max-width: 940px) 50vw, 33vw';
     image.width = photo.width;
     image.height = photo.height;
     image.alt = photo.alt || photo.title || 'Photograph';
-    image.loading = 'lazy';
-    image.decoding = 'async';
-    button.append(image);
-    button.addEventListener('click', () => openLightbox(index, button));
-    figure.append(button);
+    const imageKey = JSON.stringify([photo.src, photo.large, photo.width, photo.height]);
+    if (card.imageKey !== imageKey) {
+      card.imageKey = imageKey;
+      assignPhotoImage(image, photo, true);
+    }
 
+    let remove = figure.querySelector('.photo-remove');
     if (authenticated && editing) {
-      const remove = document.createElement('button');
-      remove.className = 'photo-remove';
-      remove.type = 'button';
-      remove.textContent = 'Remove';
+      if (!remove) {
+        remove = document.createElement('button');
+        remove.className = 'photo-remove';
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', () => {
+          const current = photos.find((item) => item.id === photo.id);
+          if (current) removePhoto(current);
+        });
+        figure.append(remove);
+      }
       remove.disabled = busy;
       remove.setAttribute('aria-label', `Remove ${photo.title || photo.file || 'photograph'}`);
-      remove.addEventListener('click', () => removePhoto(photo));
-      figure.append(remove);
+    } else remove?.remove();
+    // Keep existing image nodes and their decoded pixels when auth or content
+    // changes. Move a card only when its chronological position actually changes.
+    if (galleryElement.children[index] !== figure) {
+      galleryElement.insertBefore(figure, galleryElement.children[index] || null);
     }
-    fragment.append(figure);
   });
 
   if (!photos.length) {
     const empty = document.createElement('p');
     empty.className = 'gallery__loading';
     empty.textContent = 'No photographs yet.';
-    fragment.append(empty);
+    galleryElement.append(empty);
   }
-  galleryElement.replaceChildren(fragment);
 
   if (currentPhoto) {
     const index = photos.findIndex((photo) => photo.id === currentPhoto);
     if (index < 0) lightbox.close();
     else updateLightbox(index);
   }
-  const items = galleryElement.querySelectorAll('.gallery-item');
-  if (!('IntersectionObserver' in window)) {
-    items.forEach((item) => item.classList.add('is-visible'));
-    return;
-  }
-  observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('is-visible');
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { rootMargin: '80px 0px', threshold: 0.08 });
-  items.forEach((item) => observer.observe(item));
 }
 
 async function loadGallery() {
-  try {
-    const response = await fetch('gallery.json');
-    if (!response.ok) throw new Error('Could not load the gallery.');
-    seeds = await response.json();
-    buildGallery();
-  } catch (error) {
-    const message = document.createElement('p');
-    message.className = 'gallery__loading';
-    message.textContent = 'The photographs could not be loaded. Please try refreshing the page.';
-    galleryElement.replaceChildren(message);
-  }
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12000);
-  try {
-    const response = await fetch(`${API}/api/shared/gallery`, { cache: 'no-store', signal: controller.signal });
-    if (!response.ok) throw new Error('Could not load saved photographs.');
-    const result = await response.json();
-    if (!Array.isArray(result.photos) || !Array.isArray(result.hidden)) {
-      throw new Error('Invalid gallery response.');
+  const loadSeeds = async () => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch('gallery.json', { signal: controller.signal });
+      if (!response.ok) throw new Error('Could not load the gallery.');
+      const result = await response.json();
+      if (!Array.isArray(result)) throw new Error('Invalid gallery response.');
+      return result;
+    } finally {
+      window.clearTimeout(timeout);
     }
+  };
+  const loadPublished = async () => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch(`${API}/api/shared/gallery`, { cache: 'no-store', signal: controller.signal });
+      if (!response.ok) throw new Error('Could not load saved photographs.');
+      const result = await response.json();
+      if (!Array.isArray(result.photos) || !Array.isArray(result.hidden)) throw new Error('Invalid gallery response.');
+      return result;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+  // Start both reads together and present one combined collection, instead of
+  // painting seeds, saved photos and the session as three separate galleries.
+  const [originals, published] = await Promise.allSettled([loadSeeds(), loadPublished()]);
+  if (originals.status === 'fulfilled') seeds = originals.value;
+  if (published.status === 'fulfilled') {
+    const result = published.value;
     uploaded = result.photos;
     hidden = new Set(result.hidden);
     storageAvailable = result.available === true;
     galleryAvailable = true;
-    buildGallery();
-  } catch (error) {
-    galleryAvailable = false;
-  } finally {
-    window.clearTimeout(timeout);
   }
+  galleryLoaded = true;
+  galleryLoadFailed = originals.status === 'rejected' && published.status === 'rejected';
+  if (galleryLoadFailed) {
+    galleryElement.querySelector('.gallery__loading').textContent = 'The photographs could not be loaded. Please try refreshing the page.';
+  } else buildGallery();
   updateControls();
+  if (authenticated && !galleryAvailable) setStatus('Saved photographs could not be loaded. Refresh the page before editing.', true);
+  else if (authenticated && !storageAvailable) setStatus('Photo uploads are not available yet.', true);
 }
 
 async function removePhoto(photo) {
@@ -317,9 +351,9 @@ async function setupAdmin() {
         if (!authenticated) editing = false;
         updateControls();
         buildGallery();
-        if (authenticated && !galleryAvailable) {
+        if (authenticated && galleryLoaded && !galleryAvailable) {
           setStatus('Saved photographs could not be loaded. Refresh the page before editing.', true);
-        } else if (authenticated && !storageAvailable) {
+        } else if (authenticated && galleryLoaded && !storageAvailable) {
           setStatus('Photo uploads are not available yet.', true);
         }
       },
@@ -344,11 +378,47 @@ editButton.addEventListener('click', () => {
 closeButton.addEventListener('click', () => lightbox.close());
 previousButton.addEventListener('click', () => updateLightbox(activeIndex - 1));
 nextButton.addEventListener('click', () => updateLightbox(activeIndex + 1));
+const swipeSurface = lightbox.querySelector('figure');
+let swipeStart = null;
+let suppressClickUntil = 0;
+lightboxImage.draggable = false;
+lightbox.addEventListener('pointerdown', (event) => {
+  if (event.pointerType !== 'touch' || !lightbox.open) return;
+  if (!event.isPrimary) {
+    swipeStart = null;
+    return;
+  }
+  suppressClickUntil = 0;
+  swipeStart = swipeSurface.contains(event.target)
+    ? { id: event.pointerId, x: event.clientX, y: event.clientY, time: performance.now() }
+    : null;
+});
+lightbox.addEventListener('pointerup', (event) => {
+  const start = swipeStart;
+  swipeStart = null;
+  if (!start || !lightbox.open || event.pointerType !== 'touch' || event.pointerId !== start.id) return;
+  const dx = event.clientX - start.x;
+  const dy = event.clientY - start.y;
+  const threshold = Math.max(45, swipeSurface.clientWidth * 0.12);
+  if (performance.now() - start.time > 1000 || Math.abs(dx) < threshold || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
+  suppressClickUntil = performance.now() + 350;
+  updateLightbox(activeIndex + (dx < 0 ? 1 : -1));
+});
+for (const event of ['pointercancel', 'lostpointercapture']) {
+  lightbox.addEventListener(event, () => { swipeStart = null; });
+}
 lightbox.addEventListener('click', (event) => {
+  if (performance.now() < suppressClickUntil) {
+    event.preventDefault();
+    return;
+  }
   if (event.target === lightbox || event.target.classList.contains('lightbox__stage')) lightbox.close();
 });
 lightbox.addEventListener('close', () => {
+  swipeStart = null;
+  suppressClickUntil = 0;
   lightboxImage.dataset.retryToken = '';
+  delete lightboxImage.dataset.photoId;
   lightboxImage.removeAttribute('src');
   if (lastTrigger?.isConnected) lastTrigger.focus();
 });
@@ -359,5 +429,4 @@ lightbox.addEventListener('keydown', (event) => {
   }
 });
 
-await loadGallery();
-setupAdmin();
+await Promise.all([loadGallery(), setupAdmin()]);
