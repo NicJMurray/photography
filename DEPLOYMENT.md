@@ -10,6 +10,14 @@ Pushes to `main` build and deploy automatically through Cloudflare's GitHub inte
 
 Run `node scripts/build.mjs` before pushing. The build validates both image sizes in `gallery.json` and stages only public gallery files.
 
+The HTML uses content-hashed JavaScript and CSS URLs under `/assets/`. The imported
+photo-processing module is hashed first, so a change to ordering or conversion also
+changes the entry script URL. Existing browsers therefore receive new code on a
+normal refresh even when Cloudflare or a phone retains the old files for hours.
+HTML revalidates, while versioned assets can be cached indefinitely. Legacy asset
+URLs remain available for already-open pages. Run `node --test test/*.test.mjs`
+to check image processing and asset-version changes.
+
 The homepage links here; its old `/photography/` URLs redirect here. Changes to photographs belong in this repository, not in the legacy copy in `homepage`.
 
 ## Shared editor setup

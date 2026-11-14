@@ -32,4 +32,4 @@ If the shared API is temporarily unavailable, the original static collection sti
 - `gallery.json`, `photo-details.json`, `photos/` — original collection.
 - `test/photo-processing.test.mjs` — date, malformed input, metadata removal, ordering and conversion tests.
 
-Run `node test/photo-processing.test.mjs` and `node scripts/build.mjs`. The build stages only explicit public files into `dist`; it never publishes tests, credentials or repository configuration. See [DEPLOYMENT.md](DEPLOYMENT.md) for setup and publishing.
+Run `node --test test/*.test.mjs` and `node scripts/build.mjs`. The build stages only explicit public files into `dist`; it never publishes tests, credentials or repository configuration. It gives the gallery, its imported processing module and stylesheet content-hashed URLs so updates reach existing browsers on a normal refresh. See [DEPLOYMENT.md](DEPLOYMENT.md) for setup and publishing.
