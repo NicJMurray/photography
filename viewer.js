@@ -45,8 +45,20 @@ export function createPhotoViewer({ getPhotos }) {
     if (!selected) return;
     opening = true;
     trigger?.setAttribute('aria-busy', 'true');
+    let closeWatcher;
+    let dismissed = false;
     try {
+      // Android sends a native close request for its Back gesture. Start
+      // listening before the lazy import so Back can dismiss a pending open.
+      if (typeof window.CloseWatcher === 'function') {
+        closeWatcher = new window.CloseWatcher();
+        closeWatcher.addEventListener('close', () => {
+          dismissed = true;
+          instance?.close();
+        });
+      }
       const PhotoSwipe = await loadCore();
+      if (dismissed) return;
       const photos = getPhotos();
       const currentIndex = photos.findIndex(photo => photo.id === selected.id);
       if (currentIndex < 0) return;
@@ -84,7 +96,9 @@ export function createPhotoViewer({ getPhotos }) {
         return content.slide?.isActive ? width : Math.min(width, 1920 / (window.devicePixelRatio || 1));
       });
       document.body.classList.add('photo-viewer-open');
+      viewer.on('close', () => closeWatcher?.destroy());
       viewer.on('destroy', () => {
+        closeWatcher?.destroy();
         if (instance === viewer) instance = null;
         document.body.classList.remove('photo-viewer-open');
         if (trigger?.isConnected) trigger.focus({ preventScroll: true });
@@ -100,6 +114,7 @@ export function createPhotoViewer({ getPhotos }) {
       document.body.classList.remove('photo-viewer-open');
       throw error;
     } finally {
+      if (!instance) closeWatcher?.destroy();
       opening = false;
       trigger?.removeAttribute('aria-busy');
     }
