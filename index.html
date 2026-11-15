@@ -61,10 +61,13 @@
           <div class="photo-editor" id="photo-editor" hidden>
             <div class="photo-editor__actions">
               <button id="upload-photos" type="button">Upload photos</button>
+              <button id="replace-photos" type="button" title="Choose JPEGs, or drop files here. Exact filenames only.">Replace photos</button>
               <button id="edit-photos" type="button" aria-pressed="false">Remove photos</button>
               <input id="photo-files" type="file" accept="image/jpeg,.jpg,.jpeg" multiple hidden />
+              <input id="replace-files" type="file" accept="image/jpeg,.jpg,.jpeg" multiple hidden />
             </div>
             <p id="photo-order">Newest first.</p>
+            <p class="photo-replace-help">Replace photos matches exact filenames, including case and extension. Unmatched files are skipped. You can also drop files onto the button.</p>
             <p id="photo-status" role="status" aria-live="polite"></p>
             <ul class="photo-queue" id="photo-queue" aria-label="Photo uploads" hidden></ul>
           </div>

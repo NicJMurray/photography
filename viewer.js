@@ -11,15 +11,27 @@ function loadCore() {
 
 export function viewerItems(photos) {
   return photos.map(photo => {
-    const width = Math.min(1920, photo.width);
-    return {
+    const hasHigh = typeof photo.high === 'string' && Number.isInteger(photo.highWidth) && photo.highWidth > 0;
+    const width = hasHigh ? photo.highWidth : Math.min(1920, photo.width);
+    const item = {
       photoId: photo.id,
       src: photo.large,
       msrc: photo.src,
       width,
-      height: Math.max(1, Math.round(photo.height * width / photo.width)),
+      height: hasHigh && Number.isInteger(photo.highHeight) ? photo.highHeight : Math.max(1, Math.round(photo.height * width / photo.width)),
       alt: photo.alt || photo.title || 'Photograph',
     };
+    if (hasHigh) {
+      // Browsers pick the smallest source that suits the display/zoom. Preserve
+      // the fast 960/1920px files instead of downloading 3840px for every view.
+      const sources = new Map([
+        [Math.min(960, photo.width), photo.src],
+        [Math.min(1920, photo.width), photo.large],
+        [width, photo.high],
+      ]);
+      item.srcset = [...sources].sort(([a], [b]) => a - b).map(([size, url]) => `${url} ${size}w`).join(', ');
+    }
+    return item;
   });
 }
 
@@ -66,6 +78,11 @@ export function createPhotoViewer({ getPhotos }) {
         errorMsg: 'This photograph could not be loaded. Please close and try again.',
       });
       instance = viewer;
+      viewer.addFilter('srcsetSizesWidth', (width, content) => {
+        // Neighbours stay at medium resolution while preloading. The active
+        // photo can request its high-resolution file when it becomes useful.
+        return content.slide?.isActive ? width : Math.min(width, 1920 / (window.devicePixelRatio || 1));
+      });
       document.body.classList.add('photo-viewer-open');
       viewer.on('destroy', () => {
         if (instance === viewer) instance = null;

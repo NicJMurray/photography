@@ -169,6 +169,12 @@ h1 {
   cursor: wait;
 }
 
+.photo-editor__actions button.is-drop-target {
+  outline: 2px dashed var(--forest);
+  outline-offset: 3px;
+  background: var(--surface);
+}
+
 .photo-editor p {
   margin: 10px 0 0;
   color: var(--muted);

@@ -26,7 +26,16 @@ The homepage links here; its old `/photography/` URLs redirect here. Changes to 
 
 The photography site stays static. Authentication and writes run in the existing `recipes` Pages application at `https://recipes.njmurray.com`; it serves `shared-admin.js`, `shared-admin.css`, `/api/shared/gallery` and `/media/photography/…`. No new login service, photo-processing service or GitHub Actions workflow is needed.
 
-Configure `PHOTO_GITHUB_TOKEN` as an encrypted **production** secret on the recipes Pages project, never here or in public JavaScript. Use a fine-grained GitHub token restricted to `NicJMurray/photography` with **Contents: read and write** and no other optional permissions. It authorizes the backend to commit only the WebP image pairs; existing Cloudflare GitHub integration performs deployments. Keep the existing recipes `ADMIN_AUTH` secret and `RECIPES_DB` binding intact. See that repository's deployment instructions for its shared gallery schema and production configuration.
+Configure `PHOTO_GITHUB_TOKEN` as an encrypted **production** secret on the recipes Pages project, never here or in public JavaScript. Use a fine-grained GitHub token restricted to `NicJMurray/photography` with **Contents: read and write** and no other optional permissions. The backend uses it to commit WebP renditions; the existing Cloudflare GitHub integration performs deployments. Keep the existing recipes `ADMIN_AUTH` secret and `RECIPES_DB` binding intact. See that repository's deployment instructions for its shared gallery schema and production configuration.
+
+Before publishing the HQ/replacement uploader, apply the recipes repository's additive
+`server/site-schema.sql` migration and deploy its API. The new `gallery_media` and
+`gallery_replacements` tables preserve all existing photo rows and recipe data.
+The old two-rendition upload format remains accepted; new uploads add the optional
+`high` multipart field. `/api/shared/gallery/replace` checks the exact visible filename,
+target photo ID and revision. The public gallery response includes seed replacement
+overrides plus effective media URLs for uploaded photos. Publish the photography
+frontend after the compatible backend, with its normal content-hashed asset URLs.
 
 Preview Pages deployments intentionally cannot authenticate against the production editor; only the exact production photography and homepage origins are allowed. Local browser verification should mock the shared API or use the recipes local test harness, never production credentials.
 

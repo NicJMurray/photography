@@ -2,6 +2,7 @@
 const MAX_FILE_BYTES = 40 * 1024 * 1024;
 const MAX_PIXELS = 80_000_000;
 const MAX_WEBP_BYTES = 2_000_000;
+const MAX_HIGH_BYTES = 6_000_000;
 const naturalOrder = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 
 function captureDate(value, offset = '') {
@@ -129,6 +130,26 @@ export function sortPhotos(photos) {
   }).map(({ photo }) => photo);
 }
 
+export function planReplacements(files, photos) {
+  const existing = new Map();
+  for (const photo of photos) {
+    const matches = existing.get(photo.file) || [];
+    matches.push(photo);
+    existing.set(photo.file, matches);
+  }
+  const selectedNames = new Map();
+  for (const file of files) selectedNames.set(file.name, (selectedNames.get(file.name) || 0) + 1);
+  const matches = [];
+  const skipped = [];
+  for (const file of files) {
+    const candidates = existing.get(file.name) || [];
+    if (candidates.length !== 1 || selectedNames.get(file.name) !== 1) {
+      skipped.push({ file, reason: candidates.length > 1 || selectedNames.get(file.name) > 1 ? 'ambiguous' : 'unmatched' });
+    } else matches.push({ file, target: candidates[0] });
+  }
+  return { matches, skipped };
+}
+
 export async function stripWebPMetadata(blob) {
   const source = new Uint8Array(await blob.arrayBuffer());
   const view = new DataView(source.buffer);
@@ -174,7 +195,7 @@ async function decodeJPEG(file) {
   }
 }
 
-async function encodeWebP(image, target) {
+async function encodeWebP(image, target, high = false) {
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
   const canvas = document.createElement('canvas');
@@ -184,11 +205,11 @@ async function encodeWebP(image, target) {
   if (!context) throw new Error('This browser could not prepare the photograph.');
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   try {
-    for (const quality of [0.84, 0.74, 0.64, 0.5]) {
+    for (const quality of high ? [0.90, 0.86, 0.82] : [0.84, 0.74, 0.64, 0.5]) {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
       if (!blob) throw new Error('This browser could not create WebP images.');
       const clean = await stripWebPMetadata(blob);
-      if (clean.size <= MAX_WEBP_BYTES) return clean;
+      if (clean.size <= (high ? MAX_HIGH_BYTES : MAX_WEBP_BYTES)) return clean;
     }
     throw new Error('This photograph is too detailed to upload at this size. Try a less detailed JPEG.');
   } finally {
@@ -214,8 +235,9 @@ export async function processJPEG(file) {
     if (!width || !height || width * height > MAX_PIXELS) throw new Error('Choose a JPEG photograph smaller than 80 megapixels.');
     const small = await encodeWebP(image, 960);
     const large = await encodeWebP(image, 1920);
+    const high = await encodeWebP(image, 3840, true);
     const filenameDate = dateFromFilename(file.name);
-    return { small, large, file: file.name, capturedAt: metadata.capturedAt || filenameDate, dateSource: metadata.capturedAt ? 'exif' : filenameDate ? 'filename' : null, width, height };
+    return { small, large, high, file: file.name, capturedAt: metadata.capturedAt || filenameDate, dateSource: metadata.capturedAt ? 'exif' : filenameDate ? 'filename' : null, width, height };
   } finally {
     image.close?.();
   }

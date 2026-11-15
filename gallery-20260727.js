@@ -1,4 +1,4 @@
-import { processJPEG, sortPhotos } from './photo-processing.js';
+import { processJPEG, sortPhotos, planReplacements } from './photo-processing.js';
 import { createPhotoViewer } from './viewer.js';
 
 const API = 'https://recipes.njmurray.com';
@@ -6,8 +6,10 @@ const galleryElement = document.querySelector('#gallery');
 const viewerStatus = document.querySelector('#viewer-status');
 const editor = document.querySelector('#photo-editor');
 const uploadButton = document.querySelector('#upload-photos');
+const replaceButton = document.querySelector('#replace-photos');
 const editButton = document.querySelector('#edit-photos');
 const fileInput = document.querySelector('#photo-files');
+const replaceInput = document.querySelector('#replace-files');
 const statusElement = document.querySelector('#photo-status');
 const orderElement = document.querySelector('#photo-order');
 const queueElement = document.querySelector('#photo-queue');
@@ -15,6 +17,7 @@ const previewURLs = new Set();
 const galleryCards = new Map();
 let seeds = [];
 let uploaded = [];
+let replacements = new Map();
 let hidden = new Set();
 let photos = [];
 let galleryLoaded = false;
@@ -39,6 +42,7 @@ function setStatus(message, error = false) {
 function updateControls() {
   editor.hidden = !authenticated;
   uploadButton.disabled = busy || !storageAvailable || !galleryAvailable;
+  replaceButton.disabled = busy || !storageAvailable || !galleryAvailable;
   editButton.disabled = busy || !galleryAvailable;
   editButton.textContent = editing ? 'Done' : 'Remove photos';
   editButton.setAttribute('aria-pressed', String(editing));
@@ -81,7 +85,8 @@ async function openLightbox(index, trigger) {
 
 function buildGallery() {
   if (!galleryLoaded || galleryLoadFailed) return;
-  photos = sortPhotos([...seeds, ...uploaded].filter((photo) => !hidden.has(photo.id)));
+  const originals = seeds.map(photo => mergeReplacement(photo, replacements.get(photo.id)));
+  photos = sortPhotos([...originals, ...uploaded].filter((photo) => !hidden.has(photo.id)));
   orderElement.textContent = 'Newest first.';
   const visibleIds = new Set(photos.map((photo) => photo.id));
   for (const [id, card] of galleryCards) {
@@ -156,6 +161,16 @@ function buildGallery() {
   photoViewer.reconcile();
 }
 
+function mergeReplacement(photo, replacement) {
+  if (!replacement) return photo;
+  const result = { ...photo };
+  // A replacement changes pixels, not the photograph's identity or chronology.
+  for (const key of ['width', 'height', 'src', 'large', 'high', 'highWidth', 'highHeight', 'revision']) {
+    if (replacement[key] !== undefined) result[key] = replacement[key];
+  }
+  return result;
+}
+
 async function loadGallery() {
   const loadSeeds = async () => {
     const controller = new AbortController();
@@ -177,7 +192,7 @@ async function loadGallery() {
       const response = await fetch(`${API}/api/shared/gallery`, { cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error('Could not load saved photographs.');
       const result = await response.json();
-      if (!Array.isArray(result.photos) || !Array.isArray(result.hidden)) throw new Error('Invalid gallery response.');
+      if (!Array.isArray(result.photos) || !Array.isArray(result.hidden) || (result.replacements !== undefined && !Array.isArray(result.replacements))) throw new Error('Invalid gallery response.');
       return result;
     } finally {
       window.clearTimeout(timeout);
@@ -190,6 +205,7 @@ async function loadGallery() {
   if (published.status === 'fulfilled') {
     const result = published.value;
     uploaded = result.photos;
+    replacements = new Map((result.replacements || []).map(photo => [photo.id, photo]));
     hidden = new Set(result.hidden);
     storageAvailable = result.available === true;
     galleryAvailable = true;
@@ -225,35 +241,59 @@ async function removePhoto(photo) {
   }
 }
 
-async function uploadPhotos(files) {
+async function uploadPhotos(files, mode = 'upload') {
   if (busy || !authenticated || !request || !files.length) return;
-  if (files.length > 50) {
+  if (!galleryAvailable || !storageAvailable) {
+    setStatus('Photo uploads are not available yet.', true);
+    return;
+  }
+  const replacing = mode === 'replace';
+  if (!replacing && files.length > 50) {
     setStatus('Please select up to 50 JPEGs at a time.', true);
+    return;
+  }
+  let jobs = files.map(file => ({ file, target: null }));
+  let skipped = 0;
+  let ambiguous = 0;
+  if (replacing) {
+    const plan = planReplacements(files, photos);
+    jobs = plan.matches;
+    skipped = plan.skipped.length;
+    ambiguous = plan.skipped.filter(item => item.reason === 'ambiguous').length;
+  }
+  previewURLs.forEach(url => URL.revokeObjectURL(url));
+  previewURLs.clear();
+  queueElement.replaceChildren();
+  queueElement.hidden = jobs.length === 0;
+  const skippedSummary = () => skipped ? `${skipped} ${skipped === 1 ? 'file' : 'files'} skipped.${ambiguous ? ` ${ambiguous} had duplicate filenames.` : ''}` : '';
+  if (!jobs.length) {
+    replaceInput.value = '';
+    setStatus(`0 photographs replaced. ${skippedSummary()}`.trim());
     return;
   }
   busy = true;
   updateControls();
   buildGallery();
   let published = 0;
+  let replaced = 0;
   let alreadyPresent = 0;
   const failures = [];
-  previewURLs.forEach((url) => URL.revokeObjectURL(url));
-  previewURLs.clear();
-  const queue = files.map((file) => {
+  const queue = jobs.map(({ file }) => {
     const item = document.createElement('li');
     const name = document.createElement('strong');
     name.textContent = file.name;
     const image = document.createElement('img');
     image.alt = `Preview of ${file.name}`;
+    image.loading = 'lazy';
+    image.decoding = 'async';
     image.hidden = true;
     const status = document.createElement('span');
     status.textContent = 'Waiting';
     item.append(image, name, status);
     return { item, image, status };
   });
-  queueElement.replaceChildren(...queue.map((entry) => entry.item));
-  queueElement.hidden = false;
-  for (const [index, file] of files.entries()) {
+  queueElement.replaceChildren(...queue.map(entry => entry.item));
+  for (const [index, { file, target }] of jobs.entries()) {
     const preview = queue[index];
     let originalPreview;
     try {
@@ -261,34 +301,51 @@ async function uploadPhotos(files) {
       originalPreview = URL.createObjectURL(file);
       preview.image.src = originalPreview;
       preview.image.hidden = false;
-      setStatus(`Preparing ${index + 1} of ${files.length}: ${file.name}`);
+      setStatus(`Preparing ${index + 1} of ${jobs.length}: ${file.name}${skipped ? ` (${skipped} skipped)` : ''}`);
       const processed = await processJPEG(file);
       const thumbnail = URL.createObjectURL(processed.small);
       previewURLs.add(thumbnail);
       preview.image.src = thumbnail;
-      preview.status.textContent = 'Uploading…';
+      preview.status.textContent = replacing ? 'Replacing…' : 'Uploading…';
       const form = new FormData();
       form.append('small', processed.small, '960.webp');
       form.append('large', processed.large, '1920.webp');
+      form.append('high', processed.high, '3840.webp');
       form.append('metadata', JSON.stringify({
         file: processed.file,
         capturedAt: processed.capturedAt,
         width: processed.width,
         height: processed.height,
+        ...(replacing ? { photoId: target.id, revision: target.revision || 0 } : {}),
       }));
-      setStatus(`Publishing ${index + 1} of ${files.length}: ${file.name}`);
-      const result = await request('/api/shared/gallery', { method: 'POST', body: form });
-      if (!result.photo?.id) throw new Error('Upload response was incomplete. Refresh the gallery before retrying.');
-      const existing = uploaded.findIndex((photo) => photo.id === result.photo.id);
-      if (existing >= 0) uploaded[existing] = result.photo;
-      else uploaded.push(result.photo);
-      hidden.delete(result.photo.id);
-      if (result.duplicate) {
-        alreadyPresent += 1;
-        preview.status.textContent = 'Already in gallery';
+      setStatus(`${replacing ? 'Replacing' : 'Publishing'} ${index + 1} of ${jobs.length}: ${file.name}`);
+      const result = await request(replacing ? '/api/shared/gallery/replace' : '/api/shared/gallery', { method: 'POST', body: form });
+      if (replacing && result.skipped) {
+        skipped += 1;
+        if (result.reason === 'ambiguous') ambiguous += 1;
+        preview.status.textContent = result.reason === 'ambiguous' ? 'Skipped: more than one matching photograph.' : 'Skipped: no exact filename match.';
+        continue;
+      }
+      if (!result.photo?.id || (replacing && result.photo.id !== target.id)) throw new Error('Upload response was incomplete. Refresh the gallery before retrying.');
+      if (replacing) {
+        const updated = mergeReplacement(target, result.photo);
+        const existing = uploaded.findIndex(photo => photo.id === target.id);
+        if (existing >= 0) uploaded[existing] = updated;
+        else replacements.set(target.id, updated);
+        replaced += 1;
+        preview.status.textContent = 'Replaced';
       } else {
-        published += 1;
-        preview.status.textContent = 'Saved';
+        const existing = uploaded.findIndex(photo => photo.id === result.photo.id);
+        if (existing >= 0) uploaded[existing] = result.photo;
+        else uploaded.push(result.photo);
+        hidden.delete(result.photo.id);
+        if (result.duplicate) {
+          alreadyPresent += 1;
+          preview.status.textContent = 'Already in gallery';
+        } else {
+          published += 1;
+          preview.status.textContent = 'Saved';
+        }
       }
       buildGallery();
     } catch (error) {
@@ -297,7 +354,7 @@ async function uploadPhotos(files) {
       if (error.status === 401) {
         await admin.refresh();
         failures.push('Please log in again, then select any remaining photographs.');
-        queue.slice(index + 1).forEach((entry) => { entry.status.textContent = 'Not uploaded — log in and select again.'; });
+        queue.slice(index + 1).forEach(entry => { entry.status.textContent = 'Not uploaded — log in and select again.'; });
         break;
       }
     } finally {
@@ -312,11 +369,13 @@ async function uploadPhotos(files) {
   }
   busy = false;
   fileInput.value = '';
+  replaceInput.value = '';
   updateControls();
   buildGallery();
-  const summary = `${published} ${published === 1 ? 'photograph' : 'photographs'} published.`;
+  const count = replacing ? replaced : published;
+  const summary = `${count} ${count === 1 ? 'photograph' : 'photographs'} ${replacing ? 'replaced' : 'published'}.`;
   const duplicates = alreadyPresent ? `${alreadyPresent} already in the gallery.` : '';
-  setStatus([summary, duplicates, ...failures].filter(Boolean).join(' '), failures.length > 0);
+  setStatus([summary, duplicates, skippedSummary(), ...failures].filter(Boolean).join(' '), failures.length > 0);
 }
 
 window.addEventListener('pagehide', () => previewURLs.forEach((url) => URL.revokeObjectURL(url)));
@@ -351,6 +410,21 @@ async function setupAdmin() {
 
 uploadButton.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => uploadPhotos(Array.from(fileInput.files)));
+replaceButton.addEventListener('click', () => replaceInput.click());
+replaceInput.addEventListener('change', () => uploadPhotos(Array.from(replaceInput.files), 'replace'));
+replaceButton.addEventListener('dragover', event => {
+  event.preventDefault();
+  if (!replaceButton.disabled) {
+    event.dataTransfer.dropEffect = 'copy';
+    replaceButton.classList.add('is-drop-target');
+  }
+});
+replaceButton.addEventListener('dragleave', () => replaceButton.classList.remove('is-drop-target'));
+replaceButton.addEventListener('drop', event => {
+  event.preventDefault();
+  replaceButton.classList.remove('is-drop-target');
+  if (!replaceButton.disabled) uploadPhotos(Array.from(event.dataTransfer.files), 'replace');
+});
 editButton.addEventListener('click', () => {
   editing = !editing;
   updateControls();

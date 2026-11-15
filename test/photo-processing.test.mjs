@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readExifDate, readJPEGMetadata, dateFromFilename, sortPhotos, stripWebPMetadata, processJPEG } from '../photo-processing.js';
+import { readExifDate, readJPEGMetadata, dateFromFilename, sortPhotos, planReplacements, stripWebPMetadata, processJPEG } from '../photo-processing.js';
 
 function jpeg({ date = '2026:07:25 14:23:01', offset = '+01:00', little = true, width = 6240, height = 4160 } = {}) {
   const tiff = new Uint8Array(120);
@@ -96,6 +96,18 @@ test('breaks equal timestamp and filename ties deterministically without inferri
   assert.deepEqual(sortPhotos([...photos].reverse()).map((photo) => photo.id), ['upload-c', 'upload-b', 'upload-a', 'seed-date']);
 });
 
+test('replacement planning uses exact case-sensitive names and skips unmatched and ambiguous files', () => {
+  const photos = [{ id: 'one', file: 'DSCF0001.jpg' }, { id: 'two', file: 'DSCF0002.jpg' }, { id: 'duplicate-a', file: 'same.jpg' }, { id: 'duplicate-b', file: 'same.jpg' }];
+  const files = ['DSCF0001.jpg', 'dscf0001.jpg', 'DSCF0001.jpeg', 'new.jpg', 'same.jpg', 'DSCF0002.jpg', 'DSCF0002.jpg'].map(name => ({ name, arrayBuffer() { throw new Error('Skipped files must not be read.'); } }));
+  const plan = planReplacements(files, photos);
+  assert.deepEqual(plan.matches.map(({ file, target }) => [file.name, target.id]), [['DSCF0001.jpg', 'one']]);
+  assert.deepEqual(plan.skipped.map(({ file, reason }) => [file.name, reason]), [
+    ['dscf0001.jpg', 'unmatched'], ['DSCF0001.jpeg', 'unmatched'], ['new.jpg', 'unmatched'], ['same.jpg', 'ambiguous'], ['DSCF0002.jpg', 'ambiguous'], ['DSCF0002.jpg', 'ambiguous'],
+  ]);
+  assert.equal(plan.matches[0].target, photos[0]);
+  assert.deepEqual(planReplacements([], photos), { matches: [], skipped: [] });
+});
+
 test('strips EXIF, XMP and colour metadata chunks and clears their WebP flags', async () => {
   const source = webp([['VP8X', [0x2c, 0, 0, 0, 0, 0, 0, 0, 0, 0]], ['ICCP', [1, 2]], ['EXIF', [...new TextEncoder().encode('GPS longitude secret')]], ['XMP ', [3]], ['VP8 ', [1, 2, 3, 4]]]);
   const clean = new Uint8Array(await (await stripWebPMetadata(source)).arrayBuffer());
@@ -122,7 +134,7 @@ test('rejects oversized and non-JPEG uploads before decoding', async () => {
   await assert.rejects(processJPEG({ size: 150, arrayBuffer: async () => jpeg({ width: 20000, height: 20000 }) }), /80 megapixels/);
 });
 
-test('creates two aspect-preserving WebPs, retries size, and closes the decoded image', async () => {
+test('creates three aspect-preserving WebPs with a quality-90 high-resolution rendition', async () => {
   const original = { document: globalThis.document, createImageBitmap: globalThis.createImageBitmap };
   const rendered = [];
   let closed = false;
@@ -147,13 +159,32 @@ test('creates two aspect-preserving WebPs, retries size, and closes the decoded 
     assert.deepEqual(rendered.map(({ width, height, quality }) => ({ width, height, quality })), [
       { width: 960, height: 640, quality: 0.84 }, { width: 960, height: 640, quality: 0.74 },
       { width: 1920, height: 1280, quality: 0.84 }, { width: 1920, height: 1280, quality: 0.74 },
+      { width: 3840, height: 2560, quality: 0.90 },
     ]);
     assert.equal(result.small.type, 'image/webp');
     assert.ok(result.large.size <= 2 * 1024 * 1024);
+    assert.equal(result.high.type, 'image/webp');
+    assert.ok(result.high.size <= 6_000_000);
     assert.equal(closed, true);
   } finally {
     for (const [name, value] of Object.entries(original)) {
       if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
     }
+  }
+});
+
+test('high-resolution encoding never enlarges a small JPEG', async () => {
+  const original = { document: globalThis.document, createImageBitmap: globalThis.createImageBitmap };
+  const sizes = [];
+  globalThis.createImageBitmap = async () => ({ width: 800, height: 600, close() {} });
+  globalThis.document = { createElement() { return {
+    width: 0, height: 0, getContext() { return { drawImage() {} }; },
+    toBlob(callback, type, quality) { sizes.push([this.width, this.height, quality]);callback(webp([['VP8 ', [1, 2, 3, 4]]])); },
+  }; } };
+  try {
+    await processJPEG({ name: 'small.jpg', size: 150, arrayBuffer: async () => jpeg({ width: 800, height: 600 }) });
+    assert.deepEqual(sizes, [[800, 600, 0.84], [800, 600, 0.84], [800, 600, 0.90]]);
+  } finally {
+    for (const [name, value] of Object.entries(original)) { if (value === undefined) delete globalThis[name];else globalThis[name] = value; }
   }
 });
